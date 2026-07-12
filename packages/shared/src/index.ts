@@ -19,3 +19,22 @@ export {
 } from './constants/index';
 
 export type { ApiErrorCode } from './constants/index';
+
+// Auth and Settings contracts
+export {
+  registerRequestSchema,
+  loginRequestSchema,
+  updateSettingsRequestSchema,
+  themeEnumSchema,
+  weekDayEnumSchema,
+  timeFormatEnumSchema,
+} from './contracts/auth';
+
+export type {
+  RegisterRequest,
+  LoginRequest,
+  UpdateSettingsRequest,
+  UserResponse,
+  AuthResponse,
+  UserSettingsResponse,
+} from './contracts/auth';

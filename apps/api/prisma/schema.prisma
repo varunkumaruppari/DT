@@ -1,15 +1,6 @@
 // Prisma Schema — Daily Development Tracker
-// Version: Foundation (Milestone 01)
-// Status: Foundation only — business models belong to later milestones
-//
-// This schema establishes:
-//   - PostgreSQL datasource configuration
-//   - Prisma client generator
-//   - Database connectivity verification infrastructure
-//
-// The full Version 1 business schema (User, Planner, Task, etc.)
-// is defined in docs/03_Database_Design.md and docs/04_ERD.md
-// and will be implemented in the dedicated database milestone.
+// Version: Version 1 Business Schema (Milestone 02)
+// Status: Frozen
 
 generator client {
   provider = "prisma-client-js"
@@ -20,6 +11,474 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Business models are intentionally absent from Milestone 01.
-// An empty business schema is correct for this foundation milestone.
-// PostgreSQL connectivity is verified using prisma.$queryRaw`SELECT 1`.
+// ============================================================
+// Enums
+// ============================================================
+
+enum Theme {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+enum WeekDay {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum TimeFormat {
+  H12 @map("12_HOUR")
+  H24 @map("24_HOUR")
+}
+
+enum RecurrenceType {
+  DAILY
+  WEEKLY
+  CUSTOM
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TaskStatus {
+  PLANNED
+  SKIPPED
+  CANCELLED
+}
+
+enum CompletionMethod {
+  APP
+  NOTIFICATION
+  SYSTEM
+}
+
+enum ReminderStatus {
+  SCHEDULED
+  QUEUED
+  CANCELLED
+  COMPLETED
+}
+
+enum QueueStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum NotificationType {
+  TASK_REMINDER
+  DAILY_SUMMARY
+  ACHIEVEMENT
+  STREAK
+  SYSTEM
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+}
+
+enum MoodValue {
+  AMAZING
+  HAPPY
+  NORMAL
+  SAD
+  TIRED
+}
+
+// ============================================================
+// Models
+// ============================================================
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  passwordHash String
+  displayName  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  settings           UserSettings?
+  planners           Planner[]
+  recurringTasks     RecurringTask[]
+  categories         Category[]
+  tasks              Task[]
+  completions        TaskCompletion[]
+  reminderSchedules  ReminderSchedule[]
+  notificationQueues NotificationQueue[]
+  notifications      Notification[]
+  pushSubscriptions  PushSubscription[]
+  journalEntries     JournalEntry[]
+  moodEntries        MoodEntry[]
+  activityLogs       ActivityLog[]
+  dailyStatistics    DailyStatistics[]
+  achievements       UserAchievement[]
+  xpTransactions     XPTransaction[]
+  streak             Streak?
+
+  @@index([deletedAt])
+}
+
+model UserSettings {
+  id                     String     @id @default(uuid()) @db.Uuid
+  userId                 String     @unique @db.Uuid
+  theme                  Theme      @default(SYSTEM)
+  language               String     @default("en")
+  notificationsEnabled   Boolean    @default(true)
+  defaultReminderMinutes Int        @default(3)
+  soundEnabled           Boolean    @default(true)
+  timezone               String
+  weekStartsOn           WeekDay    @default(MONDAY)
+  dateFormat             String     @default("YYYY-MM-DD")
+  timeFormat             TimeFormat @default(H12)
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Planner {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @db.Uuid
+  plannerDate DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks Task[]
+
+  @@unique([userId, plannerDate])
+  @@index([userId])
+  @@index([plannerDate])
+}
+
+model Category {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  name      String
+  color     String
+  icon      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks          Task[]
+  recurringTasks RecurringTask[]
+
+  @@index([userId])
+  @@index([userId, name])
+}
+
+model RecurringTask {
+  id                 String         @id @default(uuid()) @db.Uuid
+  userId             String         @db.Uuid
+  categoryId         String?        @db.Uuid
+  title              String
+  description        String?
+  scheduledLocalTime String
+  priority           Priority       @default(MEDIUM)
+  recurrenceType     RecurrenceType
+  recurrenceConfig   Json
+  reminderEnabled    Boolean        @default(true)
+  reminderMinutes    Int?
+  startsOn           DateTime
+  endsOn             DateTime?
+  isActive           Boolean        @default(true)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  deletedAt          DateTime?
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  tasks    Task[]
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([startsOn])
+}
+
+model Task {
+  id              String     @id @default(uuid()) @db.Uuid
+  plannerId       String     @db.Uuid
+  userId          String     @db.Uuid
+  categoryId      String?    @db.Uuid
+  recurringTaskId String?    @db.Uuid
+  title           String
+  description     String?
+  scheduledAt     DateTime?
+  priority        Priority   @default(MEDIUM)
+  position        Int
+  status          TaskStatus @default(PLANNED)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+
+  planner           Planner            @relation(fields: [plannerId], references: [id], onDelete: Cascade)
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category          Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  recurringTask     RecurringTask?     @relation(fields: [recurringTaskId], references: [id], onDelete: SetNull)
+  completion        TaskCompletion?
+  reminderSchedules ReminderSchedule[]
+
+  @@index([plannerId])
+  @@index([userId])
+  @@index([scheduledAt])
+  @@index([categoryId])
+  @@index([recurringTaskId])
+  @@index([plannerId, position])
+}
+
+model TaskCompletion {
+  id               String           @id @default(uuid()) @db.Uuid
+  taskId           String           @unique @db.Uuid
+  userId           String           @db.Uuid
+  completedAt      DateTime         @default(now())
+  completionMethod CompletionMethod @default(APP)
+  createdAt        DateTime         @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([completedAt])
+}
+
+model ReminderSchedule {
+  id              String         @id @default(uuid()) @db.Uuid
+  taskId          String         @db.Uuid
+  userId          String         @db.Uuid
+  scheduledFor    DateTime
+  status          ReminderStatus @default(SCHEDULED)
+  reminderMinutes Int
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  task               Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notificationQueues NotificationQueue[]
+
+  @@index([scheduledFor])
+  @@index([status])
+  @@index([userId])
+  @@index([taskId])
+  @@index([status, scheduledFor])
+}
+
+model NotificationQueue {
+  id                 String      @id @default(uuid()) @db.Uuid
+  reminderScheduleId String      @db.Uuid
+  userId             String      @db.Uuid
+  status             QueueStatus @default(PENDING)
+  availableAt        DateTime
+  attemptCount       Int         @default(0)
+  maxAttempts        Int         @default(3)
+  lockedAt           DateTime?
+  lockedBy           String?
+  lastError          String?
+  processedAt        DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  reminderSchedule ReminderSchedule @relation(fields: [reminderScheduleId], references: [id], onDelete: Cascade)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifications    Notification[]
+
+  @@index([status, availableAt])
+  @@index([userId])
+  @@index([reminderScheduleId])
+  @@index([lockedAt])
+}
+
+model Notification {
+  id                  String           @id @default(uuid()) @db.Uuid
+  notificationQueueId String           @db.Uuid
+  userId              String           @db.Uuid
+  type                NotificationType
+  title               String
+  body                String
+  deliveryStatus      DeliveryStatus   @default(PENDING)
+  providerMessageId   String?
+  sentAt              DateTime?
+  deliveredAt         DateTime?
+  failedAt            DateTime?
+  failureReason       String?
+  createdAt           DateTime         @default(now())
+
+  notificationQueue NotificationQueue @relation(fields: [notificationQueueId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([deliveryStatus])
+  @@index([notificationQueueId])
+}
+
+model PushSubscription {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  isActive   Boolean   @default(true)
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isActive])
+}
+
+model JournalEntry {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @db.Uuid
+  entryDate      DateTime
+  title          String?
+  content        String
+  gratitude      String?
+  lessonsLearned String?
+  tomorrowPlan   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entryDate])
+  @@index([userId])
+  @@index([entryDate])
+}
+
+model MoodEntry {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  entryDate DateTime
+  mood      MoodValue
+  note      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entryDate])
+  @@index([userId])
+  @@index([entryDate])
+}
+
+model ActivityLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  type       String
+  entityType String
+  entityId   String
+  metadata   Json?
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([occurredAt])
+  @@index([type])
+  @@index([userId, occurredAt])
+}
+
+model DailyStatistics {
+  id                   String   @id @default(uuid()) @db.Uuid
+  userId               String   @db.Uuid
+  statisticsDate       DateTime
+  totalTasks           Int      @default(0)
+  completedTasks       Int      @default(0)
+  unfinishedTasks      Int      @default(0)
+  completionPercentage Decimal  @db.Decimal(5, 2)
+  notDonePercentage    Decimal  @db.Decimal(5, 2)
+  xpEarned             Int      @default(0)
+  focusMinutes         Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, statisticsDate])
+  @@index([userId])
+  @@index([statisticsDate])
+}
+
+model Achievement {
+  id             String   @id @default(uuid()) @db.Uuid
+  code           String   @unique
+  name           String
+  description    String
+  icon           String
+  xpReward       Int      @default(0)
+  criteriaType   String
+  criteriaConfig Json?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  users UserAchievement[]
+}
+
+model UserAchievement {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  achievementId String   @db.Uuid
+  unlockedAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+  @@index([unlockedAt])
+  @@index([achievementId])
+}
+
+model XPTransaction {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  amount         Int
+  reason         String
+  sourceType     String
+  sourceId       String
+  idempotencyKey String   @unique
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([reason])
+  @@index([userId, createdAt])
+}
+
+model Streak {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @unique @db.Uuid
+  currentStreak      Int       @default(0)
+  longestStreak      Int       @default(0)
+  lastQualifyingDate DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

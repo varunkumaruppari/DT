@@ -18,10 +18,16 @@ export const apiClient = axios.create({
   timeout: 10000,
 });
 
-// Request interceptor — auth tokens will be added here in auth milestone
+// Key used for token persistence in localStorage
+export const AUTH_TOKEN_KEY = 'ddt_access_token';
+
+// Request interceptor — auth tokens injection
 apiClient.interceptors.request.use(
   (config) => {
-    // Auth token injection — placeholder for auth milestone
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -47,5 +53,15 @@ apiClient.interceptors.response.use(
 
 export async function apiGet<T>(path: string): Promise<ApiResponse<T>> {
   const response = await apiClient.get<ApiResponse<T>>(path);
+  return response.data;
+}
+
+export async function apiPost<T, R>(path: string, data: T): Promise<ApiResponse<R>> {
+  const response = await apiClient.post<ApiResponse<R>>(path, data);
+  return response.data;
+}
+
+export async function apiPatch<T, R>(path: string, data: T): Promise<ApiResponse<R>> {
+  const response = await apiClient.patch<ApiResponse<R>>(path, data);
   return response.data;
 }
