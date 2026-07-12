@@ -1,0 +1,25 @@
+// Prisma Schema — Daily Development Tracker
+// Version: Foundation (Milestone 01)
+// Status: Foundation only — business models belong to later milestones
+//
+// This schema establishes:
+//   - PostgreSQL datasource configuration
+//   - Prisma client generator
+//   - Database connectivity verification infrastructure
+//
+// The full Version 1 business schema (User, Planner, Task, etc.)
+// is defined in docs/03_Database_Design.md and docs/04_ERD.md
+// and will be implemented in the dedicated database milestone.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Business models are intentionally absent from Milestone 01.
+// An empty business schema is correct for this foundation milestone.
+// PostgreSQL connectivity is verified using prisma.$queryRaw`SELECT 1`.
