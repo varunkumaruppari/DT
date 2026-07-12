@@ -3,9 +3,7 @@ import { PrismaClient } from '@prisma/client';
 // Singleton Prisma client — one instance per backend process.
 // Never instantiate PrismaClient in individual request handlers.
 
-// eslint-disable-next-line no-var
 declare global {
-  // eslint-disable-next-line no-var
   var __prisma: PrismaClient | undefined; // NOSONAR: global singleton
 }
 
