@@ -16,6 +16,9 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio"
   },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "dependencies": {
     "@ddt/shared": "*",
     "@prisma/client": "^6.3.1",

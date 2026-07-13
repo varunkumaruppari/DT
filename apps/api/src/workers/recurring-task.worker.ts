@@ -1,5 +1,8 @@
 import { prisma } from '../lib/prisma.js';
 import { getCurrentCalendarDate, resolveRecurringWallClockToUtc } from '../lib/timezone.js';
+import { recalculateDailyStatistics } from '../services/analytics.service.js';
+import { rebuildStreak } from '../services/streak.service.js';
+import { evaluateAchievements } from '../services/achievements.service.js';
 
 let generationInterval: NodeJS.Timeout | null = null;
 let isGenerating = false;
@@ -153,6 +156,10 @@ export async function runRecurringTaskGeneration(): Promise<void> {
               }
             }
           }
+          
+          await recalculateDailyStatistics(user.id, planner.id, tx);
+          await rebuildStreak(user.id, tx);
+          await evaluateAchievements(user.id, tx);
         });
       }
     }

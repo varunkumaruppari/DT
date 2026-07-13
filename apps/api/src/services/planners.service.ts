@@ -5,6 +5,10 @@ import {
   validatePlannerDate,
   validateTimezone,
 } from '../lib/timezone.js';
+import { recalculateDailyStatistics } from './analytics.service.js';
+import { rebuildStreak } from './streak.service.js';
+import { evaluateAchievements } from './achievements.service.js';
+
 
 export function toUtcMidnight(dateStr: string): Date {
   const [yearStr, monthStr, dayStr] = dateStr.split('-');
@@ -104,25 +108,62 @@ export async function createPlanner(userId: string, dateStr: string) {
   validatePlannerDate(dateStr);
   const plannerDate = toUtcMidnight(dateStr);
 
-  // Check if active planner already exists
-  const existingActive = await prisma.planner.findUnique({
-    where: {
-      userId_plannerDate: {
+  return prisma.$transaction(async (tx) => {
+    // Check if active planner already exists
+    const existingActive = await tx.planner.findUnique({
+      where: {
+        userId_plannerDate: {
+          userId,
+          plannerDate,
+        },
+      },
+    });
+
+    if (existingActive) {
+      if (existingActive.deletedAt === null) {
+        throw new AppError('Planner already exists for this date', 'PLANNER_ALREADY_EXISTS', 409);
+      }
+
+      // Lock existing planner row
+      await tx.$executeRaw`SELECT id FROM "Planner" WHERE id = ${existingActive.id}::uuid FOR UPDATE`;
+
+      // Soft-deleted planner exists -> restore it
+      const restored = await tx.planner.update({
+        where: { id: existingActive.id },
+        data: { deletedAt: null },
+        include: {
+          tasks: {
+            where: {
+              deletedAt: null,
+            },
+            orderBy: {
+              position: 'asc',
+            },
+            include: {
+              completion: true,
+              category: true,
+            },
+          },
+        },
+      });
+
+      await recalculateDailyStatistics(userId, restored.id, tx);
+      await rebuildStreak(userId, tx);
+      await evaluateAchievements(userId, tx);
+
+      const progress = deriveProgress(restored.tasks);
+      return {
+        ...restored,
+        progress,
+      };
+    }
+
+    // Create a new planner
+    const created = await tx.planner.create({
+      data: {
         userId,
         plannerDate,
       },
-    },
-  });
-
-  if (existingActive) {
-    if (existingActive.deletedAt === null) {
-      throw new AppError('Planner already exists for this date', 'PLANNER_ALREADY_EXISTS', 409);
-    }
-
-    // Soft-deleted planner exists -> restore it
-    const restored = await prisma.planner.update({
-      where: { id: existingActive.id },
-      data: { deletedAt: null },
       include: {
         tasks: {
           where: {
@@ -139,60 +180,48 @@ export async function createPlanner(userId: string, dateStr: string) {
       },
     });
 
-    const progress = deriveProgress(restored.tasks);
+    await recalculateDailyStatistics(userId, created.id, tx);
+    await rebuildStreak(userId, tx);
+    await evaluateAchievements(userId, tx);
+
+    const progress = deriveProgress(created.tasks);
     return {
-      ...restored,
+      ...created,
       progress,
     };
-  }
-
-  // Create a new planner
-  const created = await prisma.planner.create({
-    data: {
-      userId,
-      plannerDate,
-    },
-    include: {
-      tasks: {
-        where: {
-          deletedAt: null,
-        },
-        orderBy: {
-          position: 'asc',
-        },
-        include: {
-          completion: true,
-          category: true,
-        },
-      },
-    },
   });
-
-  const progress = deriveProgress(created.tasks);
-  return {
-    ...created,
-    progress,
-  };
 }
 
 export async function deletePlanner(userId: string, id: string) {
-  const planner = await prisma.planner.findUnique({
-    where: { id },
-  });
+  return prisma.$transaction(async (tx) => {
+    const planner = await tx.planner.findUnique({
+      where: { id },
+    });
 
-  if (!planner) {
-    throw new AppError('Planner not found', 'PLANNER_NOT_FOUND', 404);
-  }
+    if (!planner) {
+      throw new AppError('Planner not found', 'PLANNER_NOT_FOUND', 404);
+    }
 
-  if (planner.userId !== userId) {
-    throw new AppError('You do not own this planner', 'FORBIDDEN', 403);
-  }
+    if (planner.userId !== userId) {
+      throw new AppError('You do not own this planner', 'FORBIDDEN', 403);
+    }
 
-  // Soft delete only: set deletedAt
-  return prisma.planner.update({
-    where: { id },
-    data: {
-      deletedAt: new Date(),
-    },
+    // Lock Planner row
+    await tx.$executeRaw`SELECT id FROM "Planner" WHERE id = ${id}::uuid FOR UPDATE`;
+
+    // Soft delete only: set deletedAt
+    const deleted = await tx.planner.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+
+    await recalculateDailyStatistics(userId, id, tx);
+    await rebuildStreak(userId, tx);
+    await evaluateAchievements(userId, tx);
+
+    return deleted;
   });
 }
+

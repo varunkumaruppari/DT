@@ -251,3 +251,24 @@ export function getCurrentCalendarDate(timezone: string): string {
 
   return `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
 }
+
+/**
+ * Returns the calendar date string (YYYY-MM-DD) for a given Date object in the given IANA timezone.
+ */
+export function getCalendarDateInTimezone(date: Date, timezone: string): string {
+  validateTimezone(timezone);
+
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const getPart = (type: string) => parts.find((p) => p.type === type)!.value;
+
+  return `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
+}
+

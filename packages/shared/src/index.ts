@@ -131,3 +131,58 @@ export type {
   NotificationResponse,
 } from './contracts/notification';
 
+// Analytics contracts
+export {
+  analyticsDailyQuerySchema,
+  analyticsWeeklyQuerySchema,
+  analyticsMonthlyQuerySchema,
+  analyticsYearlyQuerySchema,
+} from './contracts/analytics';
+
+export type {
+  AnalyticsDailyQueryRequest,
+  AnalyticsWeeklyQueryRequest,
+  AnalyticsMonthlyQueryRequest,
+  AnalyticsYearlyQueryRequest,
+  DailyAnalyticsResponse,
+  WeeklyDaySummary,
+  WeeklyAnalyticsResponse,
+  MonthlyAnalyticsResponse,
+  YearlyAnalyticsResponse,
+} from './contracts/analytics';
+
+// Achievement contracts
+export type {
+  UserAchievementResponse,
+  AchievementsListResponse,
+} from './contracts/achievement';
+
+// XP contracts
+export {
+  xpHistoryQuerySchema,
+} from './contracts/xp';
+
+export type {
+  XpHistoryQueryRequest,
+  XpSummaryResponse,
+  XpTransactionResponse,
+  XpHistoryResponse,
+} from './contracts/xp';
+
+// Streak contracts
+export type {
+  StreakResponse,
+} from './contracts/streak';
+
+// Activity contracts
+export {
+  activityQuerySchema,
+} from './contracts/activity';
+
+export type {
+  ActivityQueryRequest,
+  ActivityLogResponse,
+  ActivityHistoryResponse,
+} from './contracts/activity';
+
+

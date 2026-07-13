@@ -3,72 +3,88 @@ import { AppError } from '../middleware/errorHandler.js';
 import { resolveWallClockToUtc } from '../lib/timezone.js';
 import { deriveProgress } from './planners.service.js';
 import type { TaskCreateRequest, TaskUpdateRequest, TaskReorderRequest } from '@ddt/shared';
+import { recalculateDailyStatistics } from './analytics.service.js';
+import { rebuildStreak } from './streak.service.js';
+import { evaluateAchievements } from './achievements.service.js';
+import { awardXP } from './xp.service.js';
+
 
 export async function createTask(userId: string, data: TaskCreateRequest) {
-  // 1. Verify planner ownership
-  const planner = await prisma.planner.findUnique({
-    where: { id: data.plannerId },
-  });
+  return prisma.$transaction(async (tx) => {
+    // 0. Acquire row lock on parent Planner row
+    await tx.$executeRaw`SELECT id FROM "Planner" WHERE id = ${data.plannerId}::uuid FOR UPDATE`;
 
-  if (!planner || planner.deletedAt !== null) {
-    throw new AppError('Planner not found', 'PLANNER_NOT_FOUND', 404);
-  }
-
-  if (planner.userId !== userId) {
-    throw new AppError('You do not own this planner', 'FORBIDDEN', 403);
-  }
-
-  // 2. Verify category ownership if supplied
-  if (data.categoryId) {
-    const category = await prisma.category.findUnique({
-      where: { id: data.categoryId },
+    // 1. Verify planner ownership
+    const planner = await tx.planner.findUnique({
+      where: { id: data.plannerId },
     });
 
-    if (!category || category.deletedAt !== null) {
-      throw new AppError('Category not found', 'CATEGORY_NOT_FOUND', 404);
+    if (!planner || planner.deletedAt !== null) {
+      throw new AppError('Planner not found', 'PLANNER_NOT_FOUND', 404);
     }
 
-    if (category.userId !== userId) {
-      throw new AppError('You do not own this category', 'FORBIDDEN', 403);
+    if (planner.userId !== userId) {
+      throw new AppError('You do not own this planner', 'FORBIDDEN', 403);
     }
-  }
 
-  // 3. Resolve scheduledTime to scheduledAt UTC instant
-  let scheduledAt: Date | null = null;
-  if (data.scheduledTime) {
-    const settings = await prisma.userSettings.findUnique({
-      where: { userId },
+    // 2. Verify category ownership if supplied
+    if (data.categoryId) {
+      const category = await tx.category.findUnique({
+        where: { id: data.categoryId },
+      });
+
+      if (!category || category.deletedAt !== null) {
+        throw new AppError('Category not found', 'CATEGORY_NOT_FOUND', 404);
+      }
+
+      if (category.userId !== userId) {
+        throw new AppError('You do not own this category', 'FORBIDDEN', 403);
+      }
+    }
+
+    // 3. Resolve scheduledTime to scheduledAt UTC instant
+    let scheduledAt: Date | null = null;
+    if (data.scheduledTime) {
+      const settings = await tx.userSettings.findUnique({
+        where: { userId },
+      });
+      const timezone = settings?.timezone || 'UTC';
+      const dateStr = planner.plannerDate.toISOString().split('T')[0]!;
+      scheduledAt = resolveWallClockToUtc(dateStr, data.scheduledTime, timezone);
+    }
+
+    // 4. Determine task position (end of list)
+    const taskCount = await tx.task.count({
+      where: {
+        plannerId: data.plannerId,
+        deletedAt: null,
+      },
     });
-    const timezone = settings?.timezone || 'UTC';
-    const dateStr = planner.plannerDate.toISOString().split('T')[0]!;
-    scheduledAt = resolveWallClockToUtc(dateStr, data.scheduledTime, timezone);
-  }
 
-  // 4. Determine task position (end of list)
-  const taskCount = await prisma.task.count({
-    where: {
-      plannerId: data.plannerId,
-      deletedAt: null,
-    },
-  });
+    // 5. Create task
+    const task = await tx.task.create({
+      data: {
+        plannerId: data.plannerId,
+        userId,
+        categoryId: data.categoryId || null,
+        title: data.title.trim(),
+        description: data.description?.trim() || null,
+        scheduledAt,
+        priority: data.priority || 'MEDIUM',
+        position: taskCount,
+        status: 'PLANNED',
+      },
+      include: {
+        completion: true,
+        category: true,
+      },
+    });
 
-  // 5. Create task
-  return prisma.task.create({
-    data: {
-      plannerId: data.plannerId,
-      userId,
-      categoryId: data.categoryId || null,
-      title: data.title.trim(),
-      description: data.description?.trim() || null,
-      scheduledAt,
-      priority: data.priority || 'MEDIUM',
-      position: taskCount,
-      status: 'PLANNED',
-    },
-    include: {
-      completion: true,
-      category: true,
-    },
+    await recalculateDailyStatistics(userId, planner.id, tx);
+    await rebuildStreak(userId, tx);
+    await evaluateAchievements(userId, tx);
+
+    return task;
   });
 }
 
@@ -93,223 +109,331 @@ export async function getTask(userId: string, id: string) {
 }
 
 export async function updateTask(userId: string, id: string, data: TaskUpdateRequest) {
-  const task = await prisma.task.findUnique({
-    where: { id },
-    include: {
-      planner: true,
-    },
-  });
-
-  if (!task || task.deletedAt !== null) {
-    throw new AppError('Task not found', 'TASK_NOT_FOUND', 404);
-  }
-
-  if (task.userId !== userId) {
-    throw new AppError('You do not own this task', 'FORBIDDEN', 403);
-  }
-
-  const updateData: {
-    title?: string;
-    description?: string | null;
-    categoryId?: string | null;
-    priority?: 'LOW' | 'MEDIUM' | 'HIGH';
-    status?: 'PLANNED' | 'SKIPPED' | 'CANCELLED';
-    scheduledAt?: Date | null;
-  } = {};
-
-  if (data.title !== undefined) {
-    updateData.title = data.title.trim();
-  }
-
-  if (data.description !== undefined) {
-    updateData.description = data.description?.trim() || null;
-  }
-
-  if (data.categoryId !== undefined) {
-    if (data.categoryId !== null) {
-      const category = await prisma.category.findUnique({
-        where: { id: data.categoryId },
-      });
-
-      if (!category || category.deletedAt !== null) {
-        throw new AppError('Category not found', 'CATEGORY_NOT_FOUND', 404);
-      }
-
-      if (category.userId !== userId) {
-        throw new AppError('You do not own this category', 'FORBIDDEN', 403);
-      }
-    }
-    updateData.categoryId = data.categoryId;
-  }
-
-  if (data.priority !== undefined) {
-    updateData.priority = data.priority;
-  }
-
-  if (data.status !== undefined) {
-    // If status is being updated directly, let's make sure it doesn't violate rules
-    const completion = await prisma.taskCompletion.findUnique({
-      where: { taskId: id },
+  return prisma.$transaction(async (tx) => {
+    const task = await tx.task.findUnique({
+      where: { id },
+      include: {
+        planner: true,
+      },
     });
 
-    if (completion && (data.status === 'SKIPPED' || data.status === 'CANCELLED')) {
-      throw new AppError('Cannot change status of a completed task', 'INVALID_TASK_TRANSITION', 409);
+    if (!task || task.deletedAt !== null) {
+      throw new AppError('Task not found', 'TASK_NOT_FOUND', 404);
     }
 
-    updateData.status = data.status;
-  }
+    if (task.userId !== userId) {
+      throw new AppError('You do not own this task', 'FORBIDDEN', 403);
+    }
 
-  if (data.scheduledTime !== undefined) {
-    if (data.scheduledTime === null) {
-      updateData.scheduledAt = null;
-    } else {
-      const settings = await prisma.userSettings.findUnique({
-        where: { userId },
+    // Lock parent Planner row
+    await tx.$executeRaw`SELECT id FROM "Planner" WHERE id = ${task.plannerId}::uuid FOR UPDATE`;
+
+    const updateData: {
+      title?: string;
+      description?: string | null;
+      categoryId?: string | null;
+      priority?: 'LOW' | 'MEDIUM' | 'HIGH';
+      status?: 'PLANNED' | 'SKIPPED' | 'CANCELLED';
+      scheduledAt?: Date | null;
+    } = {};
+
+    if (data.title !== undefined) {
+      updateData.title = data.title.trim();
+    }
+
+    if (data.description !== undefined) {
+      updateData.description = data.description?.trim() || null;
+    }
+
+    if (data.categoryId !== undefined) {
+      if (data.categoryId !== null) {
+        const category = await tx.category.findUnique({
+          where: { id: data.categoryId },
+        });
+
+        if (!category || category.deletedAt !== null) {
+          throw new AppError('Category not found', 'CATEGORY_NOT_FOUND', 404);
+        }
+
+        if (category.userId !== userId) {
+          throw new AppError('You do not own this category', 'FORBIDDEN', 403);
+        }
+      }
+      updateData.categoryId = data.categoryId;
+    }
+
+    if (data.priority !== undefined) {
+      updateData.priority = data.priority;
+    }
+
+    if (data.status !== undefined) {
+      const completion = await tx.taskCompletion.findUnique({
+        where: { taskId: id },
       });
-      const timezone = settings?.timezone || 'UTC';
-      const dateStr = task.planner.plannerDate.toISOString().split('T')[0]!;
-      updateData.scheduledAt = resolveWallClockToUtc(dateStr, data.scheduledTime, timezone);
-    }
-  }
 
-  return prisma.task.update({
-    where: { id },
-    data: updateData,
-    include: {
-      completion: true,
-      category: true,
-    },
+      if (completion && (data.status === 'SKIPPED' || data.status === 'CANCELLED')) {
+        throw new AppError('Cannot change status of a completed task', 'INVALID_TASK_TRANSITION', 409);
+      }
+
+      updateData.status = data.status;
+    }
+
+    if (data.scheduledTime !== undefined) {
+      if (data.scheduledTime === null) {
+        updateData.scheduledAt = null;
+      } else {
+        const settings = await tx.userSettings.findUnique({
+          where: { userId },
+        });
+        const timezone = settings?.timezone || 'UTC';
+        const dateStr = task.planner.plannerDate.toISOString().split('T')[0]!;
+        updateData.scheduledAt = resolveWallClockToUtc(dateStr, data.scheduledTime, timezone);
+      }
+    }
+
+    const updated = await tx.task.update({
+      where: { id },
+      data: updateData,
+      include: {
+        completion: true,
+        category: true,
+      },
+    });
+
+    await recalculateDailyStatistics(userId, task.plannerId, tx);
+    await rebuildStreak(userId, tx);
+    await evaluateAchievements(userId, tx);
+
+    return updated;
   });
 }
 
 export async function deleteTask(userId: string, id: string) {
-  const task = await prisma.task.findUnique({
-    where: { id },
-  });
+  return prisma.$transaction(async (tx) => {
+    const task = await tx.task.findUnique({
+      where: { id },
+    });
 
-  if (!task || task.deletedAt !== null) {
-    throw new AppError('Task not found', 'TASK_NOT_FOUND', 404);
-  }
+    if (!task || task.deletedAt !== null) {
+      throw new AppError('Task not found', 'TASK_NOT_FOUND', 404);
+    }
 
-  if (task.userId !== userId) {
-    throw new AppError('You do not own this task', 'FORBIDDEN', 403);
-  }
+    if (task.userId !== userId) {
+      throw new AppError('You do not own this task', 'FORBIDDEN', 403);
+    }
 
-  // Soft delete task only
-  return prisma.task.update({
-    where: { id },
-    data: {
-      deletedAt: new Date(),
-    },
+    // Lock parent Planner row
+    await tx.$executeRaw`SELECT id FROM "Planner" WHERE id = ${task.plannerId}::uuid FOR UPDATE`;
+
+    // Soft delete task only
+    const deleted = await tx.task.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+
+    await recalculateDailyStatistics(userId, task.plannerId, tx);
+    await rebuildStreak(userId, tx);
+    await evaluateAchievements(userId, tx);
+
+    return deleted;
   });
 }
 
 export async function completeTask(userId: string, id: string, completionMethod?: 'APP' | 'NOTIFICATION' | 'SYSTEM') {
-  const task = await prisma.task.findUnique({
-    where: { id },
-    include: {
-      completion: true,
-    },
-  });
+  return prisma.$transaction(async (tx) => {
+    const task = await tx.task.findUnique({
+      where: { id },
+      include: {
+        completion: true,
+      },
+    });
 
-  if (!task || task.deletedAt !== null) {
-    throw new AppError('Task not found', 'TASK_NOT_FOUND', 404);
-  }
+    if (!task || task.deletedAt !== null) {
+      throw new AppError('Task not found', 'TASK_NOT_FOUND', 404);
+    }
 
-  if (task.userId !== userId) {
-    throw new AppError('You do not own this task', 'FORBIDDEN', 403);
-  }
+    if (task.userId !== userId) {
+      throw new AppError('You do not own this task', 'FORBIDDEN', 403);
+    }
 
-  // Verify transition states
-  if (task.status === 'SKIPPED' || task.status === 'CANCELLED') {
-    throw new AppError('Cannot complete a skipped or cancelled task', 'INVALID_TASK_TRANSITION', 409);
-  }
+    // Verify transition states
+    if (task.status === 'SKIPPED' || task.status === 'CANCELLED') {
+      throw new AppError('Cannot complete a skipped or cancelled task', 'INVALID_TASK_TRANSITION', 409);
+    }
 
-  let taskCompletion = task.completion;
+    // Lock parent Planner row
+    await tx.$executeRaw`SELECT id FROM "Planner" WHERE id = ${task.plannerId}::uuid FOR UPDATE`;
 
-  if (!taskCompletion) {
-    try {
-      taskCompletion = await prisma.taskCompletion.create({
-        data: {
-          taskId: id,
-          userId,
-          completionMethod: completionMethod || 'APP',
-        },
-      });
-    } catch (err) {
-      // Handle unique constraint race
-      if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'P2002') {
-        const reRead = await prisma.taskCompletion.findUnique({
-          where: { taskId: id },
+    // Re-fetch task state after acquiring lock to get fresh, authoritative state
+    const lockedTask = await tx.task.findUnique({
+      where: { id },
+      include: {
+        completion: true,
+      },
+    });
+
+    if (!lockedTask || lockedTask.deletedAt !== null) {
+      throw new AppError('Task not found', 'TASK_NOT_FOUND', 404);
+    }
+
+    if (lockedTask.status === 'SKIPPED' || lockedTask.status === 'CANCELLED') {
+      throw new AppError('Cannot complete a skipped or cancelled task', 'INVALID_TASK_TRANSITION', 409);
+    }
+
+    let taskCompletion = lockedTask.completion;
+    let isNewCompletion = false;
+
+    if (!taskCompletion) {
+      isNewCompletion = true;
+      try {
+        taskCompletion = await tx.taskCompletion.create({
+          data: {
+            taskId: id,
+            userId,
+            completionMethod: completionMethod || 'APP',
+          },
         });
-        if (reRead) {
-          taskCompletion = reRead;
+      } catch (err) {
+        // Handle unique constraint race
+        if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'P2002') {
+          const reRead = await tx.taskCompletion.findUnique({
+            where: { taskId: id },
+          });
+          if (reRead) {
+            taskCompletion = reRead;
+            isNewCompletion = false;
+          } else {
+            throw err;
+          }
         } else {
           throw err;
         }
-      } else {
-        throw err;
       }
     }
-  }
 
-  // Calculate progress for the planner
-  const tasks = await prisma.task.findMany({
-    where: {
-      plannerId: task.plannerId,
-      deletedAt: null,
-    },
-    include: {
-      completion: true,
-    },
+    if (isNewCompletion) {
+      // Award XP transactionally with idempotency key
+      await awardXP(userId, 10, 'TASK_COMPLETED', 'TASK', id, `task-completed:${id}`, tx);
+
+      // Log Activity safely without duplication
+      const existingLog = await tx.activityLog.findFirst({
+        where: { userId, type: 'TASK_COMPLETED', entityId: id },
+      });
+      if (!existingLog) {
+        await tx.activityLog.create({
+          data: {
+            userId,
+            type: 'TASK_COMPLETED',
+            entityType: 'TASK',
+            entityId: id,
+            metadata: {
+              title: lockedTask.title,
+              completionMethod: completionMethod || 'APP',
+            },
+          },
+        });
+      }
+    }
+
+    // Recalculate stats, streak, achievements
+    await recalculateDailyStatistics(userId, task.plannerId, tx);
+    await rebuildStreak(userId, tx);
+    await evaluateAchievements(userId, tx);
+
+    // Calculate progress for the planner
+    const tasks = await tx.task.findMany({
+      where: {
+        plannerId: task.plannerId,
+        deletedAt: null,
+      },
+      include: {
+        completion: true,
+      },
+    });
+
+    const progress = deriveProgress(tasks);
+
+    return {
+      taskCompletion,
+      progress,
+    };
   });
-
-  const progress = deriveProgress(tasks);
-
-  return {
-    taskCompletion,
-    progress,
-  };
 }
 
 export async function skipTask(userId: string, id: string) {
-  const task = await prisma.task.findUnique({
-    where: { id },
-    include: {
-      completion: true,
-    },
-  });
+  return prisma.$transaction(async (tx) => {
+    const task = await tx.task.findUnique({
+      where: { id },
+      include: {
+        completion: true,
+      },
+    });
 
-  if (!task || task.deletedAt !== null) {
-    throw new AppError('Task not found', 'TASK_NOT_FOUND', 404);
-  }
+    if (!task || task.deletedAt !== null) {
+      throw new AppError('Task not found', 'TASK_NOT_FOUND', 404);
+    }
 
-  if (task.userId !== userId) {
-    throw new AppError('You do not own this task', 'FORBIDDEN', 403);
-  }
+    if (task.userId !== userId) {
+      throw new AppError('You do not own this task', 'FORBIDDEN', 403);
+    }
 
-  if (task.completion) {
-    throw new AppError('Cannot skip a completed task', 'INVALID_TASK_TRANSITION', 409);
-  }
+    if (task.completion) {
+      throw new AppError('Cannot skip a completed task', 'INVALID_TASK_TRANSITION', 409);
+    }
 
-  if (task.status === 'CANCELLED') {
-    throw new AppError('Cannot skip a cancelled task', 'INVALID_TASK_TRANSITION', 409);
-  }
+    if (task.status === 'CANCELLED') {
+      throw new AppError('Cannot skip a cancelled task', 'INVALID_TASK_TRANSITION', 409);
+    }
 
-  if (task.status === 'SKIPPED') {
-    // Idempotent retry: return task as is
-    return task;
-  }
+    if (task.status === 'SKIPPED') {
+      return task;
+    }
 
-  return prisma.task.update({
-    where: { id },
-    data: {
-      status: 'SKIPPED',
-    },
-    include: {
-      completion: true,
-      category: true,
-    },
+    // Lock parent Planner row
+    await tx.$executeRaw`SELECT id FROM "Planner" WHERE id = ${task.plannerId}::uuid FOR UPDATE`;
+
+    // Re-fetch task state after acquiring lock to get fresh, authoritative state
+    const lockedTask = await tx.task.findUnique({
+      where: { id },
+      include: {
+        completion: true,
+      },
+    });
+
+    if (!lockedTask || lockedTask.deletedAt !== null) {
+      throw new AppError('Task not found', 'TASK_NOT_FOUND', 404);
+    }
+
+    if (lockedTask.completion) {
+      throw new AppError('Cannot skip a completed task', 'INVALID_TASK_TRANSITION', 409);
+    }
+
+    if (lockedTask.status === 'CANCELLED') {
+      throw new AppError('Cannot skip a cancelled task', 'INVALID_TASK_TRANSITION', 409);
+    }
+
+    if (lockedTask.status === 'SKIPPED') {
+      return lockedTask;
+    }
+
+    const updated = await tx.task.update({
+      where: { id },
+      data: {
+        status: 'SKIPPED',
+      },
+      include: {
+        completion: true,
+        category: true,
+      },
+    });
+
+    await recalculateDailyStatistics(userId, lockedTask.plannerId, tx);
+    await rebuildStreak(userId, tx);
+    await evaluateAchievements(userId, tx);
+
+    return updated;
   });
 }
 

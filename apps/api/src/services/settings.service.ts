@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import type { UpdateSettingsRequest, UserSettingsResponse } from '@ddt/shared';
 import type { UserSettings, Prisma } from '@prisma/client';
+import { rebuildStreak } from './streak.service.js';
 
 // ============================================================
 // User Settings Service
@@ -80,6 +81,12 @@ export async function updateSettings(
     where: { userId },
     data: updateData,
   });
+
+  if (dto.timezone !== undefined) {
+    await prisma.$transaction(async (tx) => {
+      await rebuildStreak(userId, tx);
+    });
+  }
 
   return mapToSettingsDto(updatedSettings);
 }
