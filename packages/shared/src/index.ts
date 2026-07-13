@@ -85,3 +85,49 @@ export type {
   TaskResponse,
 } from './contracts/task';
 
+// Recurring Task contracts
+export {
+  recurrenceTypeEnumSchema,
+  recurrenceConfigSchema,
+  recurringTaskCreateSchema,
+  recurringTaskUpdateSchema,
+} from './contracts/recurring-task';
+
+export type {
+  RecurringTaskCreateRequest,
+  RecurringTaskUpdateRequest,
+  RecurringTaskResponse,
+} from './contracts/recurring-task';
+
+// Reminder contracts
+export {
+  reminderSnoozeSchema,
+} from './contracts/reminder';
+
+export type {
+  ReminderSnoozeRequest,
+  ReminderResponse,
+} from './contracts/reminder';
+
+// Push Subscription contracts
+export {
+  pushSubscriptionCreateSchema,
+} from './contracts/push-subscription';
+
+export type {
+  PushSubscriptionCreateRequest,
+  PushSubscriptionResponse,
+} from './contracts/push-subscription';
+
+// Notification contracts
+export {
+  notificationCompleteActionSchema,
+  notificationSnoozeActionSchema,
+} from './contracts/notification';
+
+export type {
+  NotificationCompleteActionRequest,
+  NotificationSnoozeActionRequest,
+  NotificationResponse,
+} from './contracts/notification';
+

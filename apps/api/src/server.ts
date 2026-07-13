@@ -2,6 +2,7 @@
 import { env } from './config/env.js';
 import { app } from './app.js';
 import { connectDatabase } from './lib/prisma.js';
+import { startWorkers, stopWorkers } from './workers/index.js';
 
 // ============================================================
 // server.ts — HTTP server startup
@@ -18,6 +19,7 @@ async function startServer(): Promise<void> {
     console.log('   Checking database connectivity...');
     await connectDatabase();
     console.log('   ✅ Database connected');
+    startWorkers();
   } catch (err) {
     console.warn('   ⚠️  Database not available at startup:', (err as Error).message);
     console.warn('   Server will start but /health/ready will reflect unavailable state.');
@@ -32,6 +34,7 @@ async function startServer(): Promise<void> {
   // Graceful shutdown
   process.on('SIGTERM', () => {
     console.log('\n⏹  SIGTERM received — shutting down gracefully');
+    stopWorkers();
     server.close(() => {
       console.log('   HTTP server closed');
       process.exit(0);
@@ -40,6 +43,7 @@ async function startServer(): Promise<void> {
 
   process.on('SIGINT', () => {
     console.log('\n⏹  SIGINT received — shutting down gracefully');
+    stopWorkers();
     server.close(() => {
       console.log('   HTTP server closed');
       process.exit(0);

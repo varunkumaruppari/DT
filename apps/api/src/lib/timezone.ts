@@ -164,6 +164,75 @@ export function resolveWallClockToUtc(
 }
 
 /**
+ * Resolves a wall-clock local date + time in an IANA timezone to a single UTC Date for recurring tasks.
+ * DST handling: non-existent local times return status: 'NONEXISTENT'; ambiguous local times choose the earlier UTC instant.
+ */
+export function resolveRecurringWallClockToUtc(
+  plannerDate: string,
+  scheduledTime: string,
+  timezone: string
+): { status: 'SUCCESS' | 'NONEXISTENT'; utcDate?: Date } {
+  validateTimezone(timezone);
+  validatePlannerDate(plannerDate);
+  validateScheduledTime(scheduledTime);
+
+  const [yearStr, monthStr, dayStr] = plannerDate.split('-');
+  const [hourStr, minStr] = scheduledTime.split(':');
+
+  const year = parseInt(yearStr!, 10);
+  const month = parseInt(monthStr!, 10);
+  const day = parseInt(dayStr!, 10);
+  const hour = parseInt(hourStr!, 10);
+  const minute = parseInt(minStr!, 10);
+
+  // Naive representation of local wall-clock components as if they were UTC
+  const T = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+
+  // Sample offsets around: T - 24 hours, T, T + 24 hours
+  const t1 = T - 24 * 60 * 60 * 1000;
+  const t2 = T;
+  const t3 = T + 24 * 60 * 60 * 1000;
+
+  const offsets = new Set<number>([
+    getTimezoneOffset(timezone, t1),
+    getTimezoneOffset(timezone, t2),
+    getTimezoneOffset(timezone, t3),
+  ]);
+
+  const matches: number[] = [];
+
+  for (const offset of offsets) {
+    const candidateUtc = T - offset;
+    const formatted = formatToParts(timezone, candidateUtc);
+
+    if (
+      formatted.year === year &&
+      formatted.month === month &&
+      formatted.day === day &&
+      formatted.hour === hour &&
+      formatted.minute === minute
+    ) {
+      matches.push(candidateUtc);
+    }
+  }
+
+  // Deduplicate matches
+  const uniqueMatches = Array.from(new Set(matches));
+
+  if (uniqueMatches.length === 0) {
+    return { status: 'NONEXISTENT' };
+  }
+
+  if (uniqueMatches.length > 1) {
+    // Choose the earlier UTC instant
+    const earlierUtc = Math.min(...uniqueMatches);
+    return { status: 'SUCCESS', utcDate: new Date(earlierUtc) };
+  }
+
+  return { status: 'SUCCESS', utcDate: new Date(uniqueMatches[0]!) };
+}
+
+/**
  * Returns the current calendar date string (YYYY-MM-DD) in the given IANA timezone.
  */
 export function getCurrentCalendarDate(timezone: string): string {

@@ -204,7 +204,7 @@ export async function deleteTask(userId: string, id: string) {
   });
 }
 
-export async function completeTask(userId: string, id: string) {
+export async function completeTask(userId: string, id: string, completionMethod?: 'APP' | 'NOTIFICATION' | 'SYSTEM') {
   const task = await prisma.task.findUnique({
     where: { id },
     include: {
@@ -233,7 +233,7 @@ export async function completeTask(userId: string, id: string) {
         data: {
           taskId: id,
           userId,
-          completionMethod: 'APP',
+          completionMethod: completionMethod || 'APP',
         },
       });
     } catch (err) {

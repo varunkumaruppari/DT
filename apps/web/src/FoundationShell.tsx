@@ -29,6 +29,8 @@ import { useAuth } from './contexts/AuthContext.js';
 import { apiGet, apiPost, apiPatch, apiDelete } from './lib/api.js';
 import { Button } from './components/ui/Button.js';
 import { PRODUCT_NAME } from '@ddt/shared';
+import { RecurringTaskDialog } from './components/RecurringTaskDialog.js';
+import { NotificationPermissionBanner, requestAndRegisterPush } from './components/NotificationPermissionPrompt.js';
 import type {
   UserSettingsResponse,
   UpdateSettingsRequest,
@@ -212,6 +214,7 @@ export function FoundationShell() {
   // Settings Mutation & State
   // ============================================================
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showRecurringTaskModal, setShowRecurringTaskModal] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState<'LIGHT' | 'DARK' | 'SYSTEM'>('SYSTEM');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [reminderMinutes, setReminderMinutes] = useState(3);
@@ -250,9 +253,18 @@ export function FoundationShell() {
 
   const handleSaveSettings = async () => {
     try {
+      let enableNotifications = notificationsEnabled;
+      if (notificationsEnabled && settingsQuery.data?.notificationsEnabled !== true) {
+        const success = await requestAndRegisterPush();
+        if (!success) {
+          alert('Could not enable push notifications. Please ensure notification permissions are allowed in your browser.');
+          enableNotifications = false;
+          setNotificationsEnabled(false);
+        }
+      }
       await settingsMutation.mutateAsync({
         theme: selectedTheme,
-        notificationsEnabled,
+        notificationsEnabled: enableNotifications,
         defaultReminderMinutes: reminderMinutes,
         timezone: settingsTz,
         weekStartsOn,
@@ -581,6 +593,10 @@ export function FoundationShell() {
             <span className="hidden md:inline text-xs text-muted-foreground font-medium">
               Signed in as: <strong className="text-foreground">{user?.displayName}</strong>
             </span>
+            <Button variant="ghost" size="sm" onClick={() => setShowRecurringTaskModal(true)}>
+              <Calendar className="h-4 w-4 mr-1.5" />
+              Recurring Tasks
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setShowSettingsModal(true)}>
               <Settings className="h-4 w-4 mr-1.5" />
               Settings
@@ -683,6 +699,11 @@ export function FoundationShell() {
         {/* Active Planner Workspace */}
         {!plannerQuery.isLoading && activePlanner && (
           <div className="space-y-6">
+            <NotificationPermissionBanner
+              settingsEnabled={settingsQuery.data?.notificationsEnabled || false}
+              onPermissionGranted={() => queryClient.invalidateQueries({ queryKey: ['settings'] })}
+            />
+
             {/* Dynamic Progress & Header Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-card border border-border p-6 rounded-2xl shadow-sm">
               <div className="flex flex-col justify-center space-y-2 md:col-span-2">
@@ -1440,6 +1461,13 @@ export function FoundationShell() {
           </div>
         )}
       </AnimatePresence>
+
+      <RecurringTaskDialog
+        isOpen={showRecurringTaskModal}
+        onClose={() => setShowRecurringTaskModal(false)}
+        categories={activeCategories}
+        timezone={timezone}
+      />
     </div>
   );
 }
