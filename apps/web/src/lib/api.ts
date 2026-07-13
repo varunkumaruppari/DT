@@ -65,3 +65,9 @@ export async function apiPatch<T, R>(path: string, data: T): Promise<ApiResponse
   const response = await apiClient.patch<ApiResponse<R>>(path, data);
   return response.data;
 }
+
+export async function apiDelete<R>(path: string): Promise<ApiResponse<R>> {
+  const response = await apiClient.delete<ApiResponse<R>>(path);
+  return response.data;
+}
+
