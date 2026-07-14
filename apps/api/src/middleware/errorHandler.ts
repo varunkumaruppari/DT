@@ -23,6 +23,17 @@ export class AppError extends Error {
 // Must be registered AFTER all routes in app.ts
 // ============================================================
 
+function isZodError(err: unknown): err is ZodError {
+  return (
+    err instanceof ZodError ||
+    (err !== null &&
+      typeof err === 'object' &&
+      ('name' in err && err.name === 'ZodError' || 'constructor' in err && err.constructor?.name === 'ZodError') &&
+      'issues' in err &&
+      Array.isArray(err.issues))
+  );
+}
+
 export function errorHandler(
   err: unknown,
   _req: Request,
@@ -36,7 +47,7 @@ export function errorHandler(
   }
 
   // Zod validation error
-  if (err instanceof ZodError) {
+  if (isZodError(err)) {
     const errors = err.issues.map((issue) => ({
       field: issue.path.join('.'),
       message: issue.message,
