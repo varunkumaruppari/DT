@@ -33,6 +33,7 @@ import { RecurringTaskDialog } from './components/RecurringTaskDialog.js';
 import { NotificationPermissionBanner, requestAndRegisterPush } from './components/NotificationPermissionPrompt.js';
 import { AnalyticsWorkspace } from './components/AnalyticsWorkspace.js';
 import { JournalWorkspace } from './components/JournalWorkspace.js';
+import { DashboardWorkspace } from './components/DashboardWorkspace.js';
 
 import type {
   UserSettingsResponse,
@@ -163,7 +164,7 @@ export function FoundationShell() {
   const { setTheme } = useTheme();
   const queryClient = useQueryClient();
 
-  const [activeView, setActiveView] = useState<'planner' | 'analytics' | 'journal'>('planner');
+  const [activeView, setActiveView] = useState<'dashboard' | 'planner' | 'analytics' | 'journal'>('dashboard');
 
   // Settings Queries
   const settingsQuery = useQuery({
@@ -597,6 +598,16 @@ export function FoundationShell() {
           {/* Planner/Analytics Toggle */}
           <div className="flex gap-2.5 border border-border p-1 rounded-xl bg-secondary/30">
             <button
+              onClick={() => setActiveView('dashboard')}
+              className={`text-xs font-bold px-3.5 py-1.5 rounded-lg uppercase tracking-wider transition-colors ${
+                activeView === 'dashboard'
+                  ? 'bg-card border border-border shadow-sm text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Dashboard
+            </button>
+            <button
               onClick={() => setActiveView('planner')}
               className={`text-xs font-bold px-3.5 py-1.5 rounded-lg uppercase tracking-wider transition-colors ${
                 activeView === 'planner'
@@ -656,6 +667,13 @@ export function FoundationShell() {
             currentDate={currentDate}
             timezone={timezone}
             todayStr={getTodayInTz(timezone)}
+          />
+        ) : activeView === 'dashboard' ? (
+          <DashboardWorkspace
+            currentDate={currentDate}
+            timezone={timezone}
+            todayStr={getTodayInTz(timezone)}
+            onNavigate={(view) => setActiveView(view)}
           />
         ) : (
           <>

@@ -211,3 +211,19 @@ export type {
   MoodHistoryQueryRequest,
   MoodResponse,
 } from './contracts/mood';
+
+// Dashboard contracts
+export {
+  dashboardQuerySchema,
+} from './contracts/dashboard';
+
+export type {
+  DashboardQuery,
+  DashboardProgress,
+  DashboardStreak,
+  DashboardXP,
+  DashboardMood,
+  DashboardRecentAchievement,
+  DashboardResponseData,
+} from './contracts/dashboard';
+
