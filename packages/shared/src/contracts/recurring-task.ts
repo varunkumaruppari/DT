@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { priorityEnumSchema, scheduledTimeSchema } from './task';
-import { weekDayEnumSchema } from './auth';
+import { priorityEnumSchema, scheduledTimeSchema } from './task.js';
+import { weekDayEnumSchema } from './auth.js';
 
 export const recurrenceTypeEnumSchema = z.enum(['DAILY', 'WEEKLY', 'CUSTOM']);
 

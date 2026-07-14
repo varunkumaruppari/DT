@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { TaskResponse } from './task';
+import type { TaskResponse } from './task.js';
 
 export function isValidGregorianDate(dateStr: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
