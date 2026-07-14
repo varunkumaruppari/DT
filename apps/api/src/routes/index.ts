@@ -14,6 +14,8 @@ import { achievementsRouter } from './achievements/achievements.routes.js';
 import { xpRouter } from './xp/xp.routes.js';
 import { streakRouter } from './streak/streak.routes.js';
 import { activityRouter } from './activity/activity.routes.js';
+import { journalRouter } from './journal/journal.routes.js';
+import { moodRouter } from './mood/mood.routes.js';
 
 // Version 1 API router — all business routes mount under /api/v1
 const v1Router = Router();
@@ -33,6 +35,8 @@ v1Router.use('/achievements', achievementsRouter);
 v1Router.use('/xp', xpRouter);
 v1Router.use('/streak', streakRouter);
 v1Router.use('/activity', activityRouter);
+v1Router.use('/journal', journalRouter);
+v1Router.use('/mood', moodRouter);
 
 export { v1Router };
 

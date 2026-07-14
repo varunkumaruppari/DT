@@ -143,6 +143,9 @@ export async function evaluateAchievements(userId: string, tx: Prisma.Transactio
       shouldUnlock = longestStreak >= 30;
     } else if (ach.code === 'TASKS_100') {
       shouldUnlock = completedTasksCount >= 100;
+    } else if (ach.code === 'FIRST_JOURNAL') {
+      const journalCount = await tx.journalEntry.count({ where: { userId, deletedAt: null } });
+      shouldUnlock = journalCount >= 1;
     }
 
     if (shouldUnlock) {

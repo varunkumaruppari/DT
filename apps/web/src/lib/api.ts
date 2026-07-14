@@ -71,3 +71,8 @@ export async function apiDelete<R>(path: string): Promise<ApiResponse<R>> {
   return response.data;
 }
 
+export async function apiPut<T, R>(path: string, data: T): Promise<ApiResponse<R>> {
+  const response = await apiClient.put<ApiResponse<R>>(path, data);
+  return response.data;
+}
+

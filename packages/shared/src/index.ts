@@ -185,4 +185,29 @@ export type {
   ActivityHistoryResponse,
 } from './contracts/activity';
 
+// Journal contracts
+export {
+  journalCreateSchema,
+  journalUpdateSchema,
+  journalHistoryQuerySchema,
+} from './contracts/journal';
 
+export type {
+  JournalCreateRequest,
+  JournalUpdateRequest,
+  JournalHistoryQueryRequest,
+  JournalResponse,
+} from './contracts/journal';
+
+// Mood contracts
+export {
+  moodValueSchema,
+  moodUpsertSchema,
+  moodHistoryQuerySchema,
+} from './contracts/mood';
+
+export type {
+  MoodUpsertRequest,
+  MoodHistoryQueryRequest,
+  MoodResponse,
+} from './contracts/mood';

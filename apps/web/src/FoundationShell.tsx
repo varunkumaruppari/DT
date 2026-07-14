@@ -32,6 +32,8 @@ import { PRODUCT_NAME } from '@ddt/shared';
 import { RecurringTaskDialog } from './components/RecurringTaskDialog.js';
 import { NotificationPermissionBanner, requestAndRegisterPush } from './components/NotificationPermissionPrompt.js';
 import { AnalyticsWorkspace } from './components/AnalyticsWorkspace.js';
+import { JournalWorkspace } from './components/JournalWorkspace.js';
+
 import type {
   UserSettingsResponse,
   UpdateSettingsRequest,
@@ -161,7 +163,7 @@ export function FoundationShell() {
   const { setTheme } = useTheme();
   const queryClient = useQueryClient();
 
-  const [activeView, setActiveView] = useState<'planner' | 'analytics'>('planner');
+  const [activeView, setActiveView] = useState<'planner' | 'analytics' | 'journal'>('planner');
 
   // Settings Queries
   const settingsQuery = useQuery({
@@ -605,6 +607,16 @@ export function FoundationShell() {
               Planner
             </button>
             <button
+              onClick={() => setActiveView('journal')}
+              className={`text-xs font-bold px-3.5 py-1.5 rounded-lg uppercase tracking-wider transition-colors ${
+                activeView === 'journal'
+                  ? 'bg-card border border-border shadow-sm text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Journal
+            </button>
+            <button
               onClick={() => setActiveView('analytics')}
               className={`text-xs font-bold px-3.5 py-1.5 rounded-lg uppercase tracking-wider transition-colors ${
                 activeView === 'analytics'
@@ -639,6 +651,12 @@ export function FoundationShell() {
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-8 space-y-6">
         {activeView === 'analytics' ? (
           <AnalyticsWorkspace />
+        ) : activeView === 'journal' ? (
+          <JournalWorkspace
+            currentDate={currentDate}
+            timezone={timezone}
+            todayStr={getTodayInTz(timezone)}
+          />
         ) : (
           <>
             {/* Date Selector & Navigation */}
