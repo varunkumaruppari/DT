@@ -7,7 +7,7 @@ export type {
   ApiErrorResponse,
   ApiFieldError,
   ApiResponse,
-} from './contracts/api-response';
+} from './contracts/api-response.js';
 
 // Safe constants
 export {
@@ -16,9 +16,9 @@ export {
   PRODUCT_NAME,
   PRODUCT_SHORT_NAME,
   API_ERROR_CODES,
-} from './constants/index';
+} from './constants/index.js';
 
-export type { ApiErrorCode } from './constants/index';
+export type { ApiErrorCode } from './constants/index.js';
 
 // Auth and Settings contracts
 export {
@@ -28,7 +28,7 @@ export {
   themeEnumSchema,
   weekDayEnumSchema,
   timeFormatEnumSchema,
-} from './contracts/auth';
+} from './contracts/auth.js';
 
 export type {
   RegisterRequest,
@@ -37,19 +37,19 @@ export type {
   UserResponse,
   AuthResponse,
   UserSettingsResponse,
-} from './contracts/auth';
+} from './contracts/auth.js';
 
 // Planner contracts
 export {
   isValidGregorianDate,
   plannerDateSchema,
   plannerRequestSchema,
-} from './contracts/planner';
+} from './contracts/planner.js';
 
 export type {
   PlannerRequest,
   PlannerResponse,
-} from './contracts/planner';
+} from './contracts/planner.js';
 
 // Category contracts
 export {
@@ -57,13 +57,13 @@ export {
   categoryColorSchema,
   categoryCreateSchema,
   categoryUpdateSchema,
-} from './contracts/category';
+} from './contracts/category.js';
 
 export type {
   CategoryCreateRequest,
   CategoryUpdateRequest,
   CategoryResponse,
-} from './contracts/category';
+} from './contracts/category.js';
 
 // Task contracts
 export {
@@ -75,7 +75,7 @@ export {
   taskReorderItemSchema,
   taskReorderSchema,
   taskCompleteSchema,
-} from './contracts/task';
+} from './contracts/task.js';
 
 export type {
   TaskCreateRequest,
@@ -83,7 +83,7 @@ export type {
   TaskReorderRequest,
   TaskCompleteRequest,
   TaskResponse,
-} from './contracts/task';
+} from './contracts/task.js';
 
 // Recurring Task contracts
 export {
@@ -91,45 +91,45 @@ export {
   recurrenceConfigSchema,
   recurringTaskCreateSchema,
   recurringTaskUpdateSchema,
-} from './contracts/recurring-task';
+} from './contracts/recurring-task.js';
 
 export type {
   RecurringTaskCreateRequest,
   RecurringTaskUpdateRequest,
   RecurringTaskResponse,
-} from './contracts/recurring-task';
+} from './contracts/recurring-task.js';
 
 // Reminder contracts
 export {
   reminderSnoozeSchema,
-} from './contracts/reminder';
+} from './contracts/reminder.js';
 
 export type {
   ReminderSnoozeRequest,
   ReminderResponse,
-} from './contracts/reminder';
+} from './contracts/reminder.js';
 
 // Push Subscription contracts
 export {
   pushSubscriptionCreateSchema,
-} from './contracts/push-subscription';
+} from './contracts/push-subscription.js';
 
 export type {
   PushSubscriptionCreateRequest,
   PushSubscriptionResponse,
-} from './contracts/push-subscription';
+} from './contracts/push-subscription.js';
 
 // Notification contracts
 export {
   notificationCompleteActionSchema,
   notificationSnoozeActionSchema,
-} from './contracts/notification';
+} from './contracts/notification.js';
 
 export type {
   NotificationCompleteActionRequest,
   NotificationSnoozeActionRequest,
   NotificationResponse,
-} from './contracts/notification';
+} from './contracts/notification.js';
 
 // Analytics contracts
 export {
@@ -137,7 +137,7 @@ export {
   analyticsWeeklyQuerySchema,
   analyticsMonthlyQuerySchema,
   analyticsYearlyQuerySchema,
-} from './contracts/analytics';
+} from './contracts/analytics.js';
 
 export type {
   AnalyticsDailyQueryRequest,
@@ -149,73 +149,73 @@ export type {
   WeeklyAnalyticsResponse,
   MonthlyAnalyticsResponse,
   YearlyAnalyticsResponse,
-} from './contracts/analytics';
+} from './contracts/analytics.js';
 
 // Achievement contracts
 export type {
   UserAchievementResponse,
   AchievementsListResponse,
-} from './contracts/achievement';
+} from './contracts/achievement.js';
 
 // XP contracts
 export {
   xpHistoryQuerySchema,
-} from './contracts/xp';
+} from './contracts/xp.js';
 
 export type {
   XpHistoryQueryRequest,
   XpSummaryResponse,
   XpTransactionResponse,
   XpHistoryResponse,
-} from './contracts/xp';
+} from './contracts/xp.js';
 
 // Streak contracts
 export type {
   StreakResponse,
-} from './contracts/streak';
+} from './contracts/streak.js';
 
 // Activity contracts
 export {
   activityQuerySchema,
-} from './contracts/activity';
+} from './contracts/activity.js';
 
 export type {
   ActivityQueryRequest,
   ActivityLogResponse,
   ActivityHistoryResponse,
-} from './contracts/activity';
+} from './contracts/activity.js';
 
 // Journal contracts
 export {
   journalCreateSchema,
   journalUpdateSchema,
   journalHistoryQuerySchema,
-} from './contracts/journal';
+} from './contracts/journal.js';
 
 export type {
   JournalCreateRequest,
   JournalUpdateRequest,
   JournalHistoryQueryRequest,
   JournalResponse,
-} from './contracts/journal';
+} from './contracts/journal.js';
 
 // Mood contracts
 export {
   moodValueSchema,
   moodUpsertSchema,
   moodHistoryQuerySchema,
-} from './contracts/mood';
+} from './contracts/mood.js';
 
 export type {
   MoodUpsertRequest,
   MoodHistoryQueryRequest,
   MoodResponse,
-} from './contracts/mood';
+} from './contracts/mood.js';
 
 // Dashboard contracts
 export {
   dashboardQuerySchema,
-} from './contracts/dashboard';
+} from './contracts/dashboard.js';
 
 export type {
   DashboardQuery,
@@ -225,5 +225,4 @@ export type {
   DashboardMood,
   DashboardRecentAchievement,
   DashboardResponseData,
-} from './contracts/dashboard';
-
+} from './contracts/dashboard.js';
