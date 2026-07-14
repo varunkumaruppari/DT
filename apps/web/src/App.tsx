@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext.js';
@@ -14,6 +15,42 @@ import { Register } from './pages/Register.js';
 // ============================================================
 
 export function App() {
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then((registration) => {
+        let apiBaseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
+        if (apiBaseUrl.endsWith('/')) {
+          apiBaseUrl = apiBaseUrl.slice(0, -1);
+        }
+
+        const isValid = /^(https?:\/\/)/.test(apiBaseUrl);
+        if (!isValid) {
+          console.error('[SW Config] Invalid VITE_API_BASE_URL scheme:', apiBaseUrl);
+          return;
+        }
+
+        const message = {
+          type: 'CONFIGURE_API_BASE_URL',
+          apiBaseUrl,
+        };
+
+        if (registration.active) {
+          registration.active.postMessage(message);
+        } else if (navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage(message);
+        }
+
+        // Also listen for controller changes and resend the config
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage(message);
+          }
+        });
+      }).catch((err) => {
+        console.error('[SW Config] Error during service worker configuration delivery:', err);
+      });
+    }
+  }, []);
   return (
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
